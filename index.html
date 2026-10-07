@@ -1,0 +1,568 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mapa Eleitoral RMR 2026</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: painel de filtros e resultados à esquerda, mapa ocupando o resto. */
+:root{
+  --bg:#f5f4f0; --panel:#fffefb; --fg:#1d2327; --muted:#5d6a70; --line:#dedbd2;
+  --accent:#0b6e75; --accent-fg:#fff; --soft:#e6f0ef; --warn:#8c1d2f;
+  --ramp-lo:#f3d98a; --ramp-mid:#e0763a; --ramp-hi:#8c1d2f;
+  --f-display:'Fraunces',Georgia,serif; --f-body:'IBM Plex Sans',system-ui,sans-serif; --f-mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#12181b; --panel:#192125; --fg:#e8ecec; --muted:#93a1a6; --line:#2b373c;
+  --accent:#4fc0c7; --accent-fg:#06282b; --soft:#1f3236; --warn:#ff8a8a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12181b; --panel:#192125; --fg:#e8ecec; --muted:#93a1a6; --line:#2b373c;
+  --accent:#4fc0c7; --accent-fg:#06282b; --soft:#1f3236; --warn:#ff8a8a; color-scheme:dark}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font:14px/1.45 var(--f-body);margin:0}
+*{box-sizing:border-box}
+.app{display:grid;grid-template-columns:420px 1fr;height:100%}
+aside{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0;min-width:0}
+.head{padding:14px 16px 10px;border-bottom:1px solid var(--line);display:flex;gap:10px;justify-content:space-between;align-items:flex-start}
+h1{font:600 20px/1.15 var(--f-display);margin:0 0 3px;text-wrap:balance}
+.sub{color:var(--muted);font-size:12px;margin:0}
+.scroll{overflow:auto;flex:1;min-height:0;display:flex;flex-direction:column}
+.filters{padding:12px 16px;display:grid;grid-template-columns:1fr 1fr;gap:10px;border-bottom:1px solid var(--line)}
+.full{grid-column:1/-1}
+.lbl{display:block;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:3px}
+select,input[type=search]{font:14px var(--f-body);color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px 8px;width:100%;min-width:0}
+select:focus-visible,input:focus-visible,button:focus-visible,.item:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+button{font:500 13px var(--f-body);cursor:pointer;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:6px;padding:7px 12px}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.sm{padding:4px 9px;font-size:12px}
+
+/* seleção múltipla */
+.ms{position:relative;min-width:0}
+.msb{width:100%;display:flex;justify-content:space-between;align-items:center;gap:8px;text-align:left;font-weight:400;padding:7px 9px;background:var(--bg)}
+.msb .txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.msb.on{border-color:var(--accent);background:var(--soft)}
+.msb .cnt{font:500 11px var(--f-mono);background:var(--accent);color:var(--accent-fg);border-radius:10px;padding:1px 7px;flex:none}
+.msb::after{content:"";width:7px;height:7px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg) translateY(-2px);flex:none}
+.msp{position:absolute;z-index:900;top:calc(100% + 4px);left:0;width:max(100%,300px);max-width:calc(100vw - 32px);background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:0 12px 32px rgba(0,0,0,.22);padding:8px}
+.ms.r .msp{left:auto;right:0}
+.msp .acts{display:flex;gap:6px;margin:6px 0}
+.opts{max-height:240px;overflow:auto;border-top:1px solid var(--line)}
+.opt{display:flex;gap:8px;align-items:flex-start;padding:6px 4px;border-bottom:1px solid var(--line);cursor:pointer}
+.opt:hover{background:var(--soft)}
+.opt input{margin-top:3px;accent-color:var(--accent);flex:none}
+.opt b{font-weight:500;display:block;word-break:break-word}
+.opt small{display:block;color:var(--muted);font-size:11.5px;word-break:break-word}
+.note{padding:6px 4px;color:var(--muted);font-size:11.5px}
+
+fieldset.ab{border:1px solid var(--line);border-radius:8px;margin:0;padding:8px 10px 10px;display:grid;grid-template-columns:1fr 1fr;gap:8px 10px;min-width:0}
+fieldset.ab legend{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:0 4px}
+fieldset.ab .primary{grid-column:1/-1}
+fieldset.ab label{min-width:0}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.mono{font-family:var(--f-mono)}
+.metric{display:flex;gap:4px;flex-wrap:wrap}
+.metric button{padding:5px 9px;font-size:12px}
+.metric button[aria-pressed=true]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+
+.chips{display:flex;gap:6px;flex-wrap:wrap;padding:8px 16px;border-bottom:1px solid var(--line)}
+.chips:empty{display:none}
+.chip{display:inline-flex;gap:6px;align-items:center;font-size:12px;background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:2px 4px 2px 10px}
+.chip button{border:0;background:transparent;padding:0 6px;font-size:15px;line-height:1;color:var(--muted)}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);border-bottom:1px solid var(--line)}
+.kpi{padding:9px 12px;border-right:1px solid var(--line);border-top:1px solid var(--line);min-width:0}
+.kpi:nth-child(3n){border-right:0}
+.kpi:nth-child(-n+3){border-top:0}
+.kpi b{display:block;font:500 16px var(--f-mono);font-variant-numeric:tabular-nums}
+.kpi span{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.kpi em{display:block;font:normal 10.5px var(--f-mono);color:var(--muted)}
+.kpi em.up{color:var(--warn)}
+.listhead{padding:8px 16px;font-size:12px;color:var(--muted);display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:0;background:var(--panel);z-index:2;border-bottom:1px solid var(--line)}
+.list{list-style:none;margin:0;padding:0}
+.item{padding:9px 16px;border-bottom:1px solid var(--line);cursor:pointer;display:grid;grid-template-columns:1fr auto;gap:2px 10px}
+.item:hover,.item.on{background:var(--soft)}
+.item .n{font-weight:600;font-size:13px;min-width:0}
+.item .a{grid-column:1;color:var(--muted);font-size:12px;min-width:0}
+.item .v{grid-row:1/3;grid-column:2;font:500 13px var(--f-mono);text-align:right;align-self:center;font-variant-numeric:tabular-nums}
+.item .v small{display:block;font:400 11px var(--f-mono);color:var(--muted)}
+.item .bar{grid-column:1/-1;height:3px;background:var(--line);border-radius:2px;margin-top:3px}
+.item .bar i{display:block;height:100%;border-radius:2px}
+.rk{display:inline-block;min-width:26px;font:500 11px var(--f-mono);color:var(--accent);margin-right:4px}
+.empty{padding:24px 16px;color:var(--muted)}
+.mapwrap{position:relative;min-width:0;min-height:0}
+#map{position:absolute;inset:0;background:var(--bg)}
+.legend{position:absolute;right:12px;bottom:22px;z-index:500;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:11px;min-width:180px}
+.legend .bar{height:8px;border-radius:4px;background:linear-gradient(90deg,var(--ramp-lo),var(--ramp-mid),var(--ramp-hi));margin:5px 0 3px}
+.legend .t{display:flex;justify-content:space-between;font-family:var(--f-mono);color:var(--muted)}
+.tools{position:absolute;right:12px;top:12px;z-index:500;display:flex;gap:6px}
+.tools button{background:var(--panel)}
+.toast{position:absolute;left:50%;top:14px;transform:translateX(-50%);z-index:600;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:12.5px;box-shadow:0 6px 18px rgba(0,0,0,.18)}
+.pop h3{font:600 15px/1.2 var(--f-display);margin:0 0 2px}
+.pop p{margin:0 0 6px;font-size:12px}
+.pop table{border-collapse:collapse;width:100%;font-size:11.5px;font-variant-numeric:tabular-nums}
+.pop th,.pop td{padding:2px 5px;text-align:right;border-bottom:1px solid var(--line)}
+.pop th:first-child,.pop td:first-child{text-align:left}
+.pop .sc{max-height:150px;overflow:auto;margin-top:6px}
+.pop .btns{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
+.pop a.btn{font:500 12px var(--f-body);padding:5px 9px;border-radius:6px;border:1px solid var(--accent);color:var(--accent);text-decoration:none}
+.pop a.btn.main{background:var(--accent);color:var(--accent-fg)}
+.pop .near{margin-top:6px;border-top:1px solid var(--line);padding-top:6px;font-size:12px}
+.pop .near b.h{display:block;margin-bottom:3px}
+.pop .cat{display:flex;gap:6px;align-items:baseline;padding:1px 0}
+.pop .dot{width:9px;height:9px;border-radius:50%;flex:none;align-self:center}
+.pop .cat em{color:var(--muted);font-style:normal}
+.pop .none{color:var(--muted)}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:var(--panel);color:var(--fg)}
+.leaflet-container{font-family:var(--f-body)}
+.tiles-light{filter:saturate(.6) contrast(.95) brightness(1.03)}
+.tiles-dark{filter:invert(1) hue-rotate(180deg) brightness(.85) contrast(.9) saturate(.5)}
+.fbtn{display:none}
+@media (max-width:820px){
+  html,body{height:auto}
+  .app{display:flex;flex-direction:column;height:auto;min-height:100%}
+  .mapwrap{order:-1;height:56vh;min-height:300px;flex:none}
+  aside{border-right:0}
+  .scroll{overflow:visible}
+  .fbtn{display:inline-block}
+  .filters.closed{display:none}
+  .head{padding:12px 16px 8px}
+  h1{font-size:18px}
+  .sub{display:none}
+  .kpi b{font-size:14px}
+  .kpi{padding:8px 10px}
+  .listhead{position:static}
+  select,input[type=search],button{min-height:40px}
+  .sm{min-height:36px}
+  .item{padding:11px 16px}
+  .legend{left:10px;right:auto;bottom:18px;min-width:0;max-width:60%;padding:6px 8px}
+  .legend div:last-child{display:none}
+  .tools{top:10px;right:10px}
+  .tools button{min-height:36px;padding:4px 10px}
+  /* painéis de seleção viram folha inferior */
+  .msp{position:fixed;left:8px;right:8px;bottom:8px;top:auto;width:auto;max-width:none;max-height:78vh;z-index:2000;box-shadow:0 -8px 40px rgba(0,0,0,.35)}
+  .ms.r .msp{left:8px;right:8px}
+  .opts{max-height:42vh}
+  .opt{padding:10px 4px}
+  .opt input{width:20px;height:20px}
+  .leaflet-popup-content{max-width:70vw}
+  .pop .btns a.btn{padding:9px 12px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <div class="head">
+      <div style="min-width:0">
+        <h1>Mapa eleitoral da Região Metropolitana do Recife</h1>
+        <p class="sub">Eleições 2026 em Pernambuco: abstenção, brancos e nulos por local de votação. Dados do TSE.</p>
+      </div>
+      <button type="button" class="fbtn sm" id="ftoggle" aria-expanded="true">Filtros</button>
+    </div>
+    <div class="scroll">
+      <form class="filters" id="f" autocomplete="off">
+        <div class="full ms" id="ms-m"></div>
+        <div class="ms" id="ms-z"></div>
+        <div class="ms r" id="ms-b"></div>
+        <div class="full ms" id="ms-l"></div>
+        <div class="full ms" id="ms-s"></div>
+        <fieldset class="full ab">
+          <legend>Maiores abstenções</legend>
+          <label><span class="lbl">Mostrar</span><select id="ftop">
+            <option value="0">Todos os locais</option><option value="10">10 maiores</option><option value="25">25 maiores</option>
+            <option value="50">50 maiores</option><option value="100">100 maiores</option></select></label>
+          <label><span class="lbl">Abstenção mínima <span id="fminv" class="mono">0%</span></span><input type="range" id="fmin" min="0" max="40" step="1" value="0"></label>
+          <label><span class="lbl">Raio de busca por perto</span><select id="frad"><option value="300">300 m</option><option value="500" selected>500 m</option><option value="1000">1 km</option></select></label>
+          <label><span class="lbl">Indicador no mapa</span><div class="metric" id="metric" role="group" aria-label="Indicador mostrado no mapa"></div></label>
+          <button type="button" id="preset" class="primary">Ver as 25 maiores abstenções</button>
+        </fieldset>
+        <div class="full" style="display:flex;gap:8px"><button type="button" id="clear" style="flex:1">Limpar todos os filtros</button><button type="button" id="csv" style="flex:1">Baixar lista (CSV)</button></div>
+      </form>
+      <div class="chips" id="chips"></div>
+      <div class="kpis" id="kpis"></div>
+      <div class="listhead"><span id="count"></span><span id="order"></span></div>
+      <ul class="list" id="list"></ul>
+    </div>
+  </aside>
+  <div class="mapwrap">
+    <div id="map"></div>
+    <div class="tools"><button type="button" id="fit">Enquadrar</button><button type="button" id="theme" aria-label="Alternar tema claro e escuro">Tema</button></div>
+    <div class="legend" id="legend"></div>
+  </div>
+</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="data.js"></script>
+<script>
+(function(){
+var D = window.LOCAIS || [];
+var $ = function(id){return document.getElementById(id)};
+var METRICS = {
+  abst:{label:'Abstenção',get:function(a){return a.apt?100*a.abs/a.apt:0}},
+  comp:{label:'Comparecimento',get:function(a){return a.apt?100*a.comp/a.apt:0}},
+  bra:{label:'Brancos',get:function(a){return a.comp?100*a.bra/a.comp:0}},
+  nul:{label:'Nulos',get:function(a){return a.comp?100*a.nul/a.comp:0}}
+};
+var metric='abst';
+var fmt=function(n){return Math.round(n).toLocaleString('pt-BR')};
+var pct=function(n){return n.toFixed(1).replace('.',',')+'%'};
+var esc=function(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})};
+var norm=function(s){return (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase()};
+D.forEach(function(d,i){d.i=i;d.q=norm(d.l+' '+d.e+' '+d.b)});
+function uniq(arr){return Array.from(new Set(arr)).sort(function(a,b){return a.localeCompare(b,'pt-BR')})}
+function agg(secs){
+  var a={apt:0,comp:0,abs:0,bra:0,nul:0,n:secs.length};
+  secs.forEach(function(s){a.apt+=s[1];a.comp+=s[2];a.abs+=s[3];a.bra+=s[4];a.nul+=s[5]});
+  return a;
+}
+var ALL=agg(D.reduce(function(acc,d){return acc.concat(d.s)},[]));
+var BASE=METRICS.abst.get(ALL);
+
+/* ---------- seleção múltipla ---------- */
+var allMS=[];
+function MS(root,cfg){
+  var self={sel:new Set(),cfg:cfg,root:root,open:false,q:''};
+  root.innerHTML='<span class="lbl">'+cfg.name+'</span><button type="button" class="msb" aria-haspopup="true" aria-expanded="false"><span class="txt"></span></button>'+
+    '<div class="msp" hidden><input type="search" placeholder="'+cfg.ph+'" aria-label="Buscar em '+cfg.name+'">'+
+    '<div class="acts"><button type="button" class="sm" data-a="all">Marcar todos os encontrados</button><button type="button" class="sm" data-a="none">Limpar</button><button type="button" class="sm" data-a="close" style="margin-left:auto">Fechar</button></div>'+
+    '<div class="opts"></div><div class="note"></div></div>';
+  var btn=root.querySelector('.msb'),pan=root.querySelector('.msp'),inp=root.querySelector('input'),box=root.querySelector('.opts'),note=root.querySelector('.note');
+  var shown=[];
+  self.label=function(){
+    var n=self.sel.size,t;
+    if(!n)t=cfg.all;
+    else if(n<=2)t=cfg.text(Array.from(self.sel)).join(', ');
+    else t=n+' '+cfg.plural;
+    btn.innerHTML='<span class="txt">'+esc(t)+'</span>'+(n?'<span class="cnt">'+n+'</span>':'');
+    btn.classList.toggle('on',n>0);
+  };
+  self.render=function(){
+    var opts=cfg.opts(),q=norm(self.q);
+    var m=q?opts.filter(function(o){return norm(o.t+' '+(o.s||'')).indexOf(q)>=0}):opts;
+    shown=m;
+    var cap=m.slice(0,150);
+    box.innerHTML=cap.map(function(o){
+      return '<label class="opt"><input type="checkbox" value="'+esc(o.v)+'"'+(self.sel.has(o.v)?' checked':'')+'><span><b>'+esc(o.t)+'</b>'+(o.s?'<small>'+esc(o.s)+'</small>':'')+'</span></label>';
+    }).join('');
+    note.textContent=!opts.length?'Nenhuma opção disponível com a seleção anterior.':!m.length?'Nada encontrado para essa busca.':(m.length>150?'Mostrando 150 de '+m.length+'. Digite para filtrar.':m.length+' opções');
+  };
+  self.valid=function(){var ok=new Set(cfg.opts().map(function(o){return o.v}));var ch=false;Array.from(self.sel).forEach(function(v){if(!ok.has(v)){self.sel.delete(v);ch=true}});self.label();return ch};
+  self.toggle=function(o){
+    self.open=o;pan.hidden=!o;btn.setAttribute('aria-expanded',o);
+    if(o){allMS.forEach(function(x){if(x!==self)x.toggle(false)});self.q='';inp.value='';self.render();inp.focus()}
+  };
+  btn.onclick=function(){self.toggle(!self.open)};
+  inp.addEventListener('input',function(){self.q=inp.value;self.render()});
+  inp.addEventListener('keydown',function(e){if(e.key==='Enter')e.preventDefault()});
+  box.addEventListener('change',function(e){
+    var v=e.target.value;if(e.target.checked)self.sel.add(v);else self.sel.delete(v);
+    self.label();cfg.onChange(self);
+  });
+  pan.addEventListener('click',function(e){
+    var a=e.target.dataset&&e.target.dataset.a;if(!a)return;
+    if(a==='all')shown.forEach(function(o){self.sel.add(o.v)});
+    if(a==='none')self.sel.clear();
+    if(a==='close'){self.toggle(false);btn.focus();return}
+    self.label();self.render();cfg.onChange(self);
+  });
+  self.clear=function(){self.sel.clear();self.label()};
+  allMS.push(self);self.label();
+  return self;
+}
+document.addEventListener('click',function(e){allMS.forEach(function(x){if(x.open&&!x.root.contains(e.target))x.toggle(false)})});
+document.addEventListener('keydown',function(e){if(e.key==='Escape')allMS.forEach(function(x){if(x.open){x.toggle(false);x.root.querySelector('.msb').focus()}})});
+
+/* escopos hierárquicos: município > zona > bairro > local > seção */
+function scope(level){
+  var out=D;
+  if(level>=1&&M.m.sel.size)out=out.filter(function(d){return M.m.sel.has(d.m)});
+  if(level>=2&&M.z.sel.size)out=out.filter(function(d){return M.z.sel.has(d.z)});
+  if(level>=3&&M.b.sel.size)out=out.filter(function(d){return M.b.sel.has(d.b)});
+  if(level>=4&&M.l.sel.size)out=out.filter(function(d){return M.l.sel.has(String(d.i))});
+  return out;
+}
+var M={};
+function onChange(src){cascade(src);render(true)}
+M.m=MS($('ms-m'),{name:'Município',ph:'Buscar município',all:'Toda a RMR',plural:'municípios',text:function(a){return a},
+  opts:function(){return uniq(D.map(function(d){return d.m})).map(function(v){return {v:v,t:v}})},onChange:onChange});
+M.z=MS($('ms-z'),{name:'Zona',ph:'Buscar zona',all:'Todas',plural:'zonas',text:function(a){return a},
+  opts:function(){return uniq(scope(1).map(function(d){return d.z})).map(function(v){return {v:v,t:'Zona '+v}})},onChange:onChange});
+M.b=MS($('ms-b'),{name:'Bairro',ph:'Buscar bairro',all:'Todos',plural:'bairros',text:function(a){return a},
+  opts:function(){return uniq(scope(2).map(function(d){return d.b}).filter(Boolean)).map(function(v){return {v:v,t:v}})},onChange:onChange});
+M.l=MS($('ms-l'),{name:'Local de votação ou endereço',ph:'Buscar escola, rua, avenida…',all:'Todos os locais',plural:'locais',
+  text:function(a){return a.map(function(i){return D[+i].l})},
+  opts:function(){return scope(3).slice().sort(function(a,b){return a.l.localeCompare(b.l,'pt-BR')}).map(function(d){return {v:String(d.i),t:d.l,s:d.e+(d.b?' · '+d.b:'')+' · '+d.m}})},onChange:onChange});
+M.s=MS($('ms-s'),{name:'Seção',ph:'Buscar nº da seção',all:'Todas as seções',plural:'seções',
+  text:function(a){return a.map(function(k){return k.split('|')[1]})},
+  opts:function(){var o=[];scope(4).forEach(function(d){d.s.forEach(function(s){o.push({v:d.z+'|'+s[0],t:'Seção '+s[0],s:'Zona '+d.z+' · '+d.l})})});
+    return o.sort(function(a,b){return a.v.localeCompare(b.v)})},onChange:onChange});
+var ORDER=['m','z','b','l','s'];
+function cascade(src){
+  var start=src?ORDER.indexOf(Object.keys(M).filter(function(k){return M[k]===src})[0])+1:0;
+  for(var i=start;i<ORDER.length;i++)M[ORDER[i]].valid();
+  ORDER.forEach(function(k){M[k].label()});
+  allMS.forEach(function(x){if(x.open)x.render()});
+}
+
+var mb=$('metric');
+Object.keys(METRICS).forEach(function(k){
+  var b=document.createElement('button');b.type='button';b.textContent=METRICS[k].label;b.dataset.k=k;
+  b.setAttribute('aria-pressed',k===metric);mb.appendChild(b);
+});
+
+/* ---------- mapa ---------- */
+var map=L.map('map',{preferCanvas:true}).setView([-8.05,-34.95],10);
+var tiles;
+function dark(){var t=document.documentElement.dataset.theme;return t?t==='dark':matchMedia('(prefers-color-scheme: dark)').matches}
+function setTiles(){
+  if(tiles) map.removeLayer(tiles);
+  tiles=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OpenStreetMap',maxZoom:19,className:dark()?'tiles-dark':'tiles-light'}).addTo(map);
+  tiles.bringToBack();
+}
+setTiles();
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',setTiles);
+$('theme').onclick=function(){var r=document.documentElement;r.dataset.theme=dark()?'light':'dark';setTiles();render(false)};
+
+var layer=L.layerGroup().addTo(map),poiLayer=L.layerGroup().addTo(map);
+var markers=new Map(),selected=null,pts=[];
+function lerp(a,b,t){return a+(b-a)*t}
+function hex(h){return [1,3,5].map(function(i){return parseInt(h.substr(i,2),16)})}
+function css(name){return getComputedStyle(document.documentElement).getPropertyValue(name).trim()}
+function ramp(t){
+  var c=[css('--ramp-lo'),css('--ramp-mid'),css('--ramp-hi')].map(hex);
+  t=Math.max(0,Math.min(1,t));
+  var i=t<.5?0:1,u=t<.5?t*2:(t-.5)*2;
+  return 'rgb('+[0,1,2].map(function(k){return Math.round(lerp(c[i][k],c[i+1][k],u))}).join(',')+')';
+}
+function popup(d,secs){
+  var rows=secs.map(function(s){
+    var a=agg([s]);
+    return '<tr><td>'+s[0]+'</td><td>'+fmt(s[1])+'</td><td>'+fmt(s[3])+'</td><td>'+pct(METRICS.abst.get(a))+'</td><td>'+s[4]+'</td><td>'+s[5]+'</td></tr>';
+  }).join('');
+  var a=agg(secs);
+  var dest=d.lat!=null?d.lat+','+d.lng:encodeURIComponent(d.l+', '+d.e+', '+d.m+', PE');
+  var gm='https://www.google.com/maps/dir/?api=1&destination='+dest+'&travelmode=driving';
+  var gv='https://www.google.com/maps/search/?api=1&query='+dest;
+  var gs=d.lat!=null?'https://www.google.com/maps/@?api=1&map_action=pano&viewpoint='+dest:'';
+  return '<div class="pop"><h3>'+esc(d.l)+'</h3><p>'+esc(d.e)+(d.b?' · '+esc(d.b):'')+'<br>'+esc(d.m)+' · Zona '+d.z+' · Local '+d.n+'</p>'+
+   '<div class="btns"><a class="btn main" target="_blank" rel="noopener" href="'+gm+'">Como chegar (Google Maps)</a>'+
+   '<a class="btn" target="_blank" rel="noopener" href="'+gv+'">Abrir no Google Maps</a>'+(gs?'<a class="btn" target="_blank" rel="noopener" href="'+gs+'">Street View</a>':'')+'</div>'+
+   '<div class="near" data-near="1"><b class="h">Por perto</b><span class="none">Buscando…</span></div>'+
+   '<p style="margin-top:8px"><b>'+fmt(a.apt)+'</b> eleitores · <b>'+fmt(a.abs)+'</b> abstenções (<b>'+pct(METRICS.abst.get(a))+'</b>; RMR '+pct(BASE)+') · brancos <b>'+fmt(a.bra)+'</b> · nulos <b>'+fmt(a.nul)+'</b></p>'+
+   '<div class="sc"><table><tr><th>Seção</th><th>Aptos</th><th>Abst.</th><th>%</th><th>Br.</th><th>Nu.</th></tr>'+rows+'</table></div></div>';
+}
+
+/* ---------- lugares por perto (OpenStreetMap) ---------- */
+var CATS=[
+  {k:'igreja',n:'Igrejas e templos',c:'#7b4bb7'},{k:'escola',n:'Escolas e creches',c:'#1f7acc'},
+  {k:'mercado',n:'Mercados e feiras',c:'#2e9a4d'},{k:'onibus',n:'Paradas de ônibus',c:'#d9822b'},
+  {k:'saude',n:'Saúde e farmácias',c:'#d23c52'},{k:'praca',n:'Praças e parques',c:'#12908e'}
+];
+function catOf(t){
+  var a=t.amenity,sh=t.shop;
+  if(a==='place_of_worship')return 'igreja';
+  if(a==='school'||a==='kindergarten'||a==='college'||a==='university')return 'escola';
+  if(a==='marketplace'||sh==='supermarket'||sh==='convenience'||sh==='greengrocer'||sh==='mall'||sh==='department_store'||sh==='butcher'||sh==='bakery')return 'mercado';
+  if(t.highway==='bus_stop'||t.public_transport==='platform')return 'onibus';
+  if(a==='hospital'||a==='clinic'||a==='pharmacy'||a==='doctors'||a==='dentist')return 'saude';
+  if(t.leisure==='park'||t.leisure==='playground'||t.place==='square')return 'praca';
+  return null;
+}
+function hav(a,b,c,d){var R=6371000,r=Math.PI/180,x=(c-a)*r,y=(d-b)*r,h=Math.sin(x/2)*Math.sin(x/2)+Math.cos(a*r)*Math.cos(c*r)*Math.sin(y/2)*Math.sin(y/2);return 2*R*Math.asin(Math.sqrt(h))}
+var poiCache={};
+var MIRRORS=['https://overpass-api.de/api/interpreter','https://overpass-api.de/api/interpreter','https://overpass.private.coffee/api/interpreter','https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter'];
+function viaMirrors(q){
+  var i=0,tries=0;
+  function go(){
+    var url=MIRRORS[i%MIRRORS.length];i++;tries++;
+    var ctl=new AbortController(),t=setTimeout(function(){ctl.abort()},35000);
+    return fetch(url,{method:'POST',body:'data='+encodeURIComponent(q),headers:{'Content-Type':'application/x-www-form-urlencoded'},signal:ctl.signal})
+      .then(function(r){clearTimeout(t);if(!r.ok)throw new Error(r.status);return r.json()})
+      .catch(function(e){clearTimeout(t);if(tries>=5)throw e;return new Promise(function(res){setTimeout(res,600)}).then(go)});
+  }
+  return go();
+}
+function overpass(lat,lng,rad){
+  var key=lat+','+lng+','+rad;
+  if(poiCache[key])return poiCache[key];
+  var a='(around:'+rad+','+lat+','+lng+')';
+  var q='[out:json][timeout:30];('+
+    'nwr'+a+'[amenity~"^(place_of_worship|school|kindergarten|college|university|marketplace|hospital|clinic|pharmacy|doctors|dentist)$"];'+
+    'nwr'+a+'[shop~"^(supermarket|convenience|greengrocer|mall|department_store|butcher|bakery)$"];'+
+    'nwr'+a+'[highway=bus_stop];nwr'+a+'[public_transport=platform][bus=yes];'+
+    'nwr'+a+'[leisure~"^(park|playground)$"];nwr'+a+'[place=square];);out center tags 400;';
+  var p=viaMirrors(q).then(function(j){
+    var seen={},out=[];
+    j.elements.forEach(function(e){
+      var la=e.lat!=null?e.lat:e.center&&e.center.lat,lo=e.lon!=null?e.lon:e.center&&e.center.lon;
+      if(la==null)return;var tg=e.tags||{},k=catOf(tg);if(!k)return;
+      var nm=(tg.name||'').trim();
+      var id=k+'|'+(nm||e.type+e.id);if(k==='onibus')id=k+'|'+(nm||e.id)+'|'+la.toFixed(4)+lo.toFixed(4);
+      if(seen[id])return;seen[id]=1;
+      out.push({k:k,name:nm,lat:la,lng:lo,dist:Math.round(hav(lat,lng,la,lo)),sub:tg.religion||tg.shop||tg.amenity||''});
+    });
+    return out;
+  });
+  p.catch(function(){delete poiCache[key]});
+  return poiCache[key]=p;
+}
+var SUB={christian:'cristã',muslim:'muçulmana',jewish:'judaica',buddhist:'budista',spiritualist:'espírita',afro_brazilian:'afro-brasileira',supermarket:'supermercado',convenience:'conveniência',greengrocer:'hortifrúti',mall:'shopping',marketplace:'feira/mercado',butcher:'açougue',bakery:'padaria',pharmacy:'farmácia',hospital:'hospital',clinic:'clínica',doctors:'consultório',dentist:'dentista',school:'escola',kindergarten:'creche',college:'faculdade',university:'universidade'};
+function fillNear(box,d){
+  var rad=+$('frad').value,title='<b class="h">Por perto (até '+(rad>=1000?'1 km':rad+' m')+')</b>';
+  poiLayer.clearLayers();
+  if(d.lat==null){box.innerHTML='<b class="h">Por perto</b><span class="none">Este local não tem coordenadas na planilha.</span>';return}
+  box.innerHTML=title+'<span class="none">Buscando (pode levar alguns segundos)…</span>';
+  overpass(d.lat,d.lng,rad).then(function(list){
+    var h=title;
+    CATS.forEach(function(c){
+      var it=list.filter(function(x){return x.k===c.k}).sort(function(a,b){return a.dist-b.dist});
+      if(!it.length){h+='<div class="cat"><i class="dot" style="background:'+c.c+';opacity:.35"></i><span class="none">'+c.n+': nenhum encontrado</span></div>';return}
+      var near=it.slice(0,3).map(function(x){return esc(x.name||(SUB[x.sub]||'sem nome'))+' <em>('+x.dist+' m)</em>'}).join('; ');
+      h+='<div class="cat"><i class="dot" style="background:'+c.c+'"></i><span><b>'+c.n+': '+it.length+'</b> · '+near+'</span></div>';
+      it.forEach(function(x){L.circleMarker([x.lat,x.lng],{radius:5,color:'#fff',weight:1,fillColor:c.c,fillOpacity:.95}).bindTooltip((x.name||c.n)+' · '+x.dist+' m').addTo(poiLayer)});
+    });
+    box.innerHTML=h+'<div class="none" style="margin-top:4px;font-size:11px">Fonte: OpenStreetMap. Pode haver locais não cadastrados.</div>';
+  }).catch(function(err){
+    console.error('Overpass:',err);
+    box.innerHTML='<b class="h">Por perto</b><span class="none">Não foi possível buscar agora (serviço ocupado ou sem internet). <a href="#" class="retry">Tentar de novo</a></span>';
+    var a=box.querySelector('.retry');if(a)a.onclick=function(ev){ev.preventDefault();fillNear(box,d)};
+  });
+}
+map.on('popupopen',function(e){
+  var box=e.popup.getElement().querySelector('[data-near]'),mk=e.popup._source,d=null;
+  markers.forEach(function(v,k){if(v===mk)d=k});
+  if(box&&d){fillNear(box,d);mark(d)}
+});
+map.on('popupclose',function(){poiLayer.clearLayers()});
+
+/* ---------- filtros e renderização ---------- */
+var current=[];
+function filtered(){
+  var secSel=M.s.sel,mn=+$('fmin').value,top=+$('ftop').value,list=[];
+  scope(4).forEach(function(d){
+    var secs=secSel.size?d.s.filter(function(s){return secSel.has(d.z+'|'+s[0])}):d.s;
+    if(!secs.length)return;
+    var a=agg(secs);list.push({d:d,a:a,secs:secs,ab:METRICS.abst.get(a),v:METRICS[metric].get(a)});
+  });
+  if(mn)list=list.filter(function(r){return r.ab>=mn});
+  if(top){list.sort(function(a,b){return b.ab-a.ab});list=list.slice(0,top);list.forEach(function(r,i){r.rank=i+1})}
+  return list;
+}
+function render(fit){
+  $('fminv').textContent=$('fmin').value+'%';
+  var list=filtered();current=list;
+  var vals=list.map(function(r){return r.v}).sort(function(a,b){return a-b});
+  var lo=vals.length?vals[Math.floor(vals.length*.03)]:0,hi=vals.length?vals[Math.min(vals.length-1,Math.floor(vals.length*.97))]:1;
+  if(hi-lo<.01)hi=lo+1;
+  layer.clearLayers();markers.clear();pts=[];
+  var noCoord=0;
+  list.forEach(function(r){
+    var d=r.d;if(d.lat==null){noCoord++;return}
+    var rad=Math.max(4,Math.min(16,3+Math.sqrt(r.a.apt)/5));
+    var mk=L.circleMarker([d.lat,d.lng],{radius:rad,color:dark()?'#0b1114':'#ffffff',weight:1.2,fillColor:ramp((r.v-lo)/(hi-lo)),fillOpacity:.9});
+    mk.bindPopup(function(){return popup(d,r.secs)},{maxWidth:340});
+    mk.addTo(layer);markers.set(d,mk);pts.push([d.lat,d.lng]);
+  });
+  if(fit)fitMap();
+
+  var tot=agg(list.reduce(function(acc,r){return acc.concat(r.secs)},[]));
+  var ab=METRICS.abst.get(tot),diff=ab-BASE;
+  $('kpis').innerHTML=[
+    ['Seções',fmt(tot.n),''],['Eleitores aptos',fmt(tot.apt),''],
+    ['Abstenções',fmt(tot.abs),'<em>pessoas</em>'],
+    ['Abstenção',pct(ab),'<em class="'+(diff>0.05?'up':'')+'">'+(diff>=0?'+':'−')+Math.abs(diff).toFixed(1).replace('.',',')+' pp vs RMR</em>'],
+    ['Brancos',fmt(tot.bra),'<em>'+pct(tot.comp?100*tot.bra/tot.comp:0)+' dos votantes</em>'],
+    ['Nulos',fmt(tot.nul),'<em>'+pct(tot.comp?100*tot.nul/tot.comp:0)+' dos votantes</em>']
+  ].map(function(k){return '<div class="kpi"><b>'+k[1]+'</b><span>'+k[0]+'</span>'+k[2]+'</div>'}).join('');
+  $('count').textContent=list.length.toLocaleString('pt-BR')+' locais de votação'+(noCoord?' ('+noCoord+' sem coordenadas)':'');
+  $('order').textContent=METRICS[metric].label+' · maior primeiro';
+  list.sort(function(a,b){return b.v-a.v});
+  var shown=list.slice(0,300);
+  var mx=vals.length?vals[vals.length-1]||1:1;
+  $('list').innerHTML=shown.length?shown.map(function(r,i){
+    return '<li class="item" tabindex="0" data-i="'+i+'"><span class="n">'+(r.rank?'<span class="rk">#'+r.rank+'</span>':'')+esc(r.d.l)+'</span><span class="v">'+pct(r.v)+'<small>'+fmt(r.a.abs)+' abst.</small></span><span class="a">'+esc(r.d.e)+(r.d.b?' · '+esc(r.d.b):'')+' · Z'+r.d.z+'</span>'+
+      '<span class="bar"><i style="width:'+Math.max(2,100*r.v/mx)+'%;background:'+ramp((r.v-lo)/(hi-lo))+'"></i></span></li>';
+  }).join('')+(list.length>300?'<li class="empty">Mostrando 300 de '+list.length+'. Use os filtros para refinar.</li>':''):'<li class="empty">Nenhum local encontrado com esses filtros.</li>';
+  $('list')._rows=shown;
+  $('legend').innerHTML='<b>'+METRICS[metric].label+'</b> por local<div class="bar"></div><div class="t"><span>'+pct(lo)+'</span><span>'+pct(hi)+'</span></div><div style="color:var(--muted);margin-top:3px">Tamanho = eleitores aptos</div>';
+  chips();
+}
+function fitMap(){
+  if(!pts.length)return;
+  var one=pts.length===1;
+  map.fitBounds(pts,{padding:[40,40],maxZoom:one?17:(M.s.sel.size||M.l.sel.size||M.b.sel.size?16:13)});
+}
+function chips(){
+  var h='';
+  ORDER.forEach(function(k){
+    var m=M[k];if(!m.sel.size)return;
+    h+='<span class="chip">'+m.cfg.name.split(' ')[0]+': '+m.sel.size+'<button type="button" data-k="'+k+'" aria-label="Remover filtro '+m.cfg.name+'">×</button></span>';
+  });
+  if(+$('ftop').value)h+='<span class="chip">Top '+$('ftop').value+'<button type="button" data-k="top" aria-label="Remover limite">×</button></span>';
+  if(+$('fmin').value)h+='<span class="chip">Abst. ≥ '+$('fmin').value+'%<button type="button" data-k="min" aria-label="Remover mínimo">×</button></span>';
+  $('chips').innerHTML=h;
+}
+$('chips').addEventListener('click',function(e){
+  var k=e.target.dataset&&e.target.dataset.k;if(!k)return;
+  if(k==='top')$('ftop').value='0';else if(k==='min')$('fmin').value='0';
+  else{M[k].clear();cascade(M[k])}
+  render(true);
+});
+function mark(d){
+  selected=d;
+  document.querySelectorAll('.item').forEach(function(el){el.classList.remove('on')});
+  var rows=$('list')._rows||[];
+  for(var i=0;i<rows.length;i++){if(rows[i].d===d){var el=document.querySelector('.item[data-i="'+i+'"]');if(el){el.classList.add('on');el.scrollIntoView({block:'nearest'})}break}}
+}
+function pick(el){
+  var li=el.closest('.item');if(!li)return;
+  var r=$('list')._rows[+li.dataset.i];if(!r||r.d.lat==null)return;
+  map.flyTo([r.d.lat,r.d.lng],17,{duration:.6});
+  var mk=markers.get(r.d);if(mk)setTimeout(function(){mk.openPopup()},650);
+  mark(r.d);
+  if(matchMedia('(max-width:820px)').matches)$('map').scrollIntoView({behavior:'smooth'});
+}
+$('list').addEventListener('click',function(e){pick(e.target)});
+$('list').addEventListener('keydown',function(e){if(e.key==='Enter')pick(e.target)});
+
+$('ftop').addEventListener('change',function(){render(true)});
+$('fmin').addEventListener('input',function(){render(true)});
+$('f').addEventListener('submit',function(e){e.preventDefault()});
+$('preset').onclick=function(){
+  $('ftop').value='25';$('fmin').value='0';metric='abst';
+  mb.querySelectorAll('button').forEach(function(b){b.setAttribute('aria-pressed',b.dataset.k==='abst')});
+  render(true);
+};
+$('clear').onclick=function(){$('ftop').value='0';$('fmin').value='0';ORDER.forEach(function(k){M[k].clear()});cascade();render(true)};
+$('fit').onclick=fitMap;
+mb.addEventListener('click',function(e){
+  var k=e.target.dataset&&e.target.dataset.k;if(!k)return;metric=k;
+  mb.querySelectorAll('button').forEach(function(b){b.setAttribute('aria-pressed',b.dataset.k===k)});
+  render(false);
+});
+$('ftoggle').onclick=function(){
+  var f=$('f'),c=f.classList.toggle('closed');$('ftoggle').setAttribute('aria-expanded',!c);
+};
+if(matchMedia('(max-width:820px)').matches){$('f').classList.add('closed');$('ftoggle').setAttribute('aria-expanded','false')}
+
+$('csv').onclick=function(){
+  var cols=['Município','Zona','Bairro','Local de votação','Endereço','Seções','Eleitores aptos','Comparecimento','Abstenções','% abstenção','Brancos','Nulos','Latitude','Longitude'];
+  var q=function(v){v=String(v==null?'':v);return /[;"\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
+  var rows=current.slice().sort(function(a,b){return b.ab-a.ab}).map(function(r){
+    var d=r.d,a=r.a;
+    return [d.m,d.z,d.b,d.l,d.e,a.n,a.apt,a.comp,a.abs,r.ab.toFixed(2).replace('.',','),a.bra,a.nul,d.lat,d.lng].map(q).join(';');
+  });
+  var blob=new Blob(['﻿'+cols.join(';')+'\n'+rows.join('\n')],{type:'text/csv;charset=utf-8'});
+  var url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download='locais-de-votacao-filtrados.csv';document.body.appendChild(a);a.click();a.remove();
+  setTimeout(function(){URL.revokeObjectURL(url)},2000);
+};
+
+cascade();
+render(true);
+})();
+</script>
+</body>
+</html>
